@@ -14,7 +14,6 @@ import numpy as np
 import imageio
 
 
-
 def XbyY2XY(xbyy):
     """Converts a string like 10x20 into a tuple: (10, 20)
 
@@ -27,6 +26,7 @@ def XbyY2XY(xbyy):
     if m is None:
         raise ValueError(str(xbyy) + " doesn't appear to be in XxY format")
     return (int(m[1]), int(m[2]))
+
 
 def index2rowcol(index, rows, cols, order):
     """Converts an index to an x and y within a rows by cols grid, filed in order
@@ -114,6 +114,7 @@ class CompositeImage(object):
         right = left + self.subdims[1]
         self.image[top:bottom, left:right, ...] = image
 
+
 def main():
     p = ap.ArgumentParser(prog="gvpreview")
     p.add_argument("-d", "--dims", type=str, required=True,
@@ -125,6 +126,8 @@ def main():
                    help="Order in which images are taken (cols or rows, left orright)")
     p.add_argument("-f", "--format", type=str, default="jpg",
                    help="File format of input images")
+    p.add_argument("-v", "--verbose", action="store_true",
+                   help="Use verbose output")
     p.add_argument("-o", "--output", type=str, required=True,
                    help="Output image")
     p.add_argument("input", type=str,
@@ -145,7 +148,8 @@ def main():
         camname, date, idx, ext = filename2dateidx(image)
         pos = index2rowcol(idx, superdim[0], superdim[1], args.order)
         comp.set_subimage(pos[0], pos[1], load_downsize(image, size=subdim))
-        print("\t-", camname, date, "at", pos)
+        if args.verbose:
+            print("\t-", camname, date, "at", pos)
     imageio.imsave(args.output, comp.image)
     shutil.rmtree(tmp)
 
