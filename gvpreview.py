@@ -100,14 +100,31 @@ def gather_images(tarordir, format="jpg", tmpdir=None):
 
 
 class CompositeImage(object):
+    """Class to piece together composite images
 
+
+    >>> import numpy as np
+    >>> ci = CompositeImage((2, 3), (100, 100))
+    >>> ci.image.shape
+    (200, 300, 3)
+    >>> ci.image.sum()
+    0
+    >>> ci.set_subimage((1, 1), np.ones((100, 100, 3)))
+    >>> ci.image[99, 99, 1]
+    0
+    >>> ci.image[100, 100, 1]
+    1
+    >>> ci.image.sum()
+    30000
+    """
     def __init__(self, dims, subdims):
         self.dims = dims
         self.subdims = subdims
         self.image = np.zeros((dims[0]*subdims[0], dims[1]*subdims[1], 3),
                               dtype=np.uint8)
 
-    def set_subimage(self, row, col, image):
+    def set_subimage(self, pos, image):
+        row, col = pos
         top = row * self.subdims[0]
         bottom = top + self.subdims[0]
         left = col * self.subdims[1]
@@ -147,7 +164,7 @@ def main():
     for image in gather_images(args.input, format=args.format, tmpdir=tmp):
         camname, date, idx, ext = filename2dateidx(image)
         pos = index2rowcol(idx, superdim[0], superdim[1], args.order)
-        comp.set_subimage(pos[0], pos[1], load_downsize(image, size=subdim))
+        comp.set_subimage(pos, load_downsize(image, size=subdim))
         if args.verbose:
             print("\t-", camname, date, "at", pos)
     imageio.imsave(args.output, comp.image)
