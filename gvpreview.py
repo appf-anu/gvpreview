@@ -13,11 +13,13 @@ import glob
 from tempfile import mkdtemp
 from sys import stderr, stdout, stdin
 import shutil
+from collections import namedtuple
 
 import skimage as ski
 import numpy as np
 import imageio
 
+Image = namedtuple("Image", "filename camname date index ext pixels")
 
 def XbyY2XY(xbyy):
     """Converts a string like 10x20 into a tuple: (10, 20)
@@ -64,8 +66,7 @@ def index2rowcol(index, rows, cols, order):
         raise ValueError("Bad order")
 
 
-def load_downsize(pathorfile, size=None, scale=None):
-    img = imageio.imread(pathorfile)
+def downsize(img, size=None, scale=None):
     if size is not None and scale is not None:
         raise ValueError("Only one of size or scale can be given")
     elif size is not None:
@@ -87,20 +88,25 @@ def filename2dateidx(path):
     return (camname, date, idx, ext)
 
 
-
 def gather_images(tarordir, format="jpg", tmpdir=None):
     if op.isdir(tarordir):
         files = glob.glob("{base}/*.{ext}".format(base=tarordir, ext=format))
-        files.sort()
-        return files
+        for file in files:
+            try:
+                c, d, i, e = filename2dateidx(file)
+                pix = imageio.imread(file)
+                yield Image(file, c, d, i, e, pix)
+            except Exception as e:
+                print("Skipping", entry.name, ":", str(e), file=stderr)
     else:
-        # FIXME work out how to avoid extraction
-        import fnmatch
         tf = tarfile.TarFile(tarordir)
-        print("extracting", tarordir, "...", file=stderr, flush=True, end=" ")
-        tf.extractall(tmpdir)
-        print("done", file=stderr)
-        return gather_images(tmpdir)
+        for entry in tf:
+            try:
+                c, d, i, e = filename2dateidx(entry.name)
+                pix = imageio.imread(tf.extractfile(entry))
+                yield Image(entry.name, c, d, i, e, pix)
+            except Exception as e:
+                print("Skipping", entry.name, ":", str(e), file=stderr)
 
 
 class CompositeImage(object):
@@ -168,13 +174,12 @@ def main():
         print("images:")
     n = 0
     for image in gather_images(args.input, format=args.format, tmpdir=tmp):
-        camname, date, idx, ext = filename2dateidx(image)
-        pos = index2rowcol(idx, superdim[0], superdim[1], args.order)
-        img = load_downsize(image, size=subdim)
-        comp.set_subimage(pos, img)
-        n += 1
+        pos = index2rowcol(image.index, superdim[0], superdim[1], args.order)
+        comp.set_subimage(pos, downsize(image.pixels, size=subdim))
         if args.verbose:
-            print("\t-", camname, date, "at", pos, "pixelsum is", comp.image.sum())
+            print("\t-", image.camname, image.date, "at", pos,
+                  "pixelsum is", comp.image.sum())
+        n += 1
     print("num_images:", n)
     imageio.imsave(args.output, comp.image)
     shutil.rmtree(tmp)
