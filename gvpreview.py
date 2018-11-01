@@ -105,8 +105,8 @@ def gather_images(tarordir, format="jpg"):
         for file in files:
             try:
                 c, d, i, e = filename2dateidx(file)
-                pix = imageio.imread(file)
                 if e == format:
+                    pix = imageio.imread(file)
                     yield Image(file, c, d, i, e, pix)
             except Exception as e:
                 print("Skipping", entry.name, ":", str(e), file=stderr)
@@ -115,8 +115,8 @@ def gather_images(tarordir, format="jpg"):
         for entry in tf:
             try:
                 c, d, i, e = filename2dateidx(entry.name)
-                pix = imageio.imread(tf.extractfile(entry))
                 if e == format:
+                    pix = imageio.imread(tf.extractfile(entry))
                     yield Image(entry.name, c, d, i, e, pix)
             except Exception as e:
                 print("Skipping", entry.name, ":", str(e), file=stderr)
