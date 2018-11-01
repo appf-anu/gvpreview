@@ -19,6 +19,15 @@ import skimage as ski
 import numpy as np
 import imageio
 
+def nowarnings(func):
+    def wrapped(*args, **kwargs):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return func(*args, **kwargs)
+    return wrapped
+
+
 Image = namedtuple("Image", "filename camname date index ext pixels")
 
 def XbyY2XY(xbyy):
@@ -66,6 +75,7 @@ def index2rowcol(index, rows, cols, order):
         raise ValueError("Bad order")
 
 
+@nowarnings
 def downsize(img, size=None, scale=None):
     if size is not None and scale is not None:
         raise ValueError("Only one of size or scale can be given")
@@ -88,14 +98,16 @@ def filename2dateidx(path):
     return (camname, date, idx, ext)
 
 
-def gather_images(tarordir, format="jpg", tmpdir=None):
+@nowarnings
+def gather_images(tarordir, format="jpg"):
     if op.isdir(tarordir):
         files = glob.glob("{base}/*.{ext}".format(base=tarordir, ext=format))
         for file in files:
             try:
                 c, d, i, e = filename2dateidx(file)
                 pix = imageio.imread(file)
-                yield Image(file, c, d, i, e, pix)
+                if e == format:
+                    yield Image(file, c, d, i, e, pix)
             except Exception as e:
                 print("Skipping", entry.name, ":", str(e), file=stderr)
     else:
@@ -104,14 +116,14 @@ def gather_images(tarordir, format="jpg", tmpdir=None):
             try:
                 c, d, i, e = filename2dateidx(entry.name)
                 pix = imageio.imread(tf.extractfile(entry))
-                yield Image(entry.name, c, d, i, e, pix)
+                if e == format:
+                    yield Image(entry.name, c, d, i, e, pix)
             except Exception as e:
                 print("Skipping", entry.name, ":", str(e), file=stderr)
 
 
 class CompositeImage(object):
     """Class to piece together composite images
-
 
     >>> import numpy as np
     >>> ci = CompositeImage((2, 3), (100, 100))
@@ -142,6 +154,32 @@ class CompositeImage(object):
         self.image[top:bottom, left:right, ...] = image
 
 
+def make_composite(input, output, dims, resize, format="jpg",
+                   order="colsright", verbose=False):
+    superdim = XbyY2XY(dims)
+    subdim = XbyY2XY(resize)
+    comp = CompositeImage(superdim, subdim)
+    print("input:", input)
+    print("dimensions:", dims)
+    if verbose:
+        print("images:")
+    n = 0
+    try:
+        for image in gather_images(input, format=format):
+            pos = index2rowcol(image.index, superdim[0], superdim[1], order)
+            comp.set_subimage(pos, downsize(image.pixels, size=subdim))
+            if verbose:
+                print("\t- inserted", image.filename, "at", pos,
+                    "pixelsum is", comp.image.sum())
+            n += 1
+    except KeyboardInterrupt as e:
+        print("Terminating early due to Ctrl-C")
+    except Exception as e:
+        print("Terminating early due to error:", str(e))
+    print("num_images:", n)
+    imageio.imsave(output, comp.image)
+
+
 def main():
     p = ap.ArgumentParser(prog="gvpreview")
     p.add_argument("-d", "--dims", type=str, required=True,
@@ -161,28 +199,9 @@ def main():
                    help="Input tarfile or directory of sub-images")
 
     args = p.parse_args()
+    make_composite(args.input, args.output, args.dims, args.resize, args.format,
+                   args.order, args.verbose)
 
-    tmp = mkdtemp()
-
-    superdim = XbyY2XY(args.dims)
-    subdim = XbyY2XY(args.resize)
-
-    comp = CompositeImage(superdim, subdim)
-    print("input:", args.input)
-    print("dimensions:", args.dims)
-    if args.verbose:
-        print("images:")
-    n = 0
-    for image in gather_images(args.input, format=args.format, tmpdir=tmp):
-        pos = index2rowcol(image.index, superdim[0], superdim[1], args.order)
-        comp.set_subimage(pos, downsize(image.pixels, size=subdim))
-        if args.verbose:
-            print("\t-", image.camname, image.date, "at", pos,
-                  "pixelsum is", comp.image.sum())
-        n += 1
-    print("num_images:", n)
-    imageio.imsave(args.output, comp.image)
-    shutil.rmtree(tmp)
 
 if __name__ == "__main__":
     main()
