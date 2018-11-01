@@ -66,14 +66,13 @@ def index2rowcol(index, rows, cols, order):
 
 def load_downsize(pathorfile, size=None, scale=None):
     img = imageio.imread(pathorfile)
-    if size is None and scale is None:
-        return img
-    elif size is not None:
-        return ski.transform.resize(img, size, anti_aliasing=True)
-    elif scale is not None:
-        return ski.transform.rescale(img, scale, anti_aliasing=True)
-    else:
+    if size is not None and scale is not None:
         raise ValueError("Only one of size or scale can be given")
+    elif size is not None:
+        img = ski.transform.resize(img, size, anti_aliasing=True, mode="constant", order=3)
+    elif scale is not None:
+        img = ski.transform.rescale(img, scale, anti_aliasing=True)
+    return ski.img_as_ubyte(img)
 
 def filename2dateidx(path):
     fn = op.basename(path)
@@ -165,13 +164,18 @@ def main():
     comp = CompositeImage(superdim, subdim)
     print("input:", args.input)
     print("dimensions:", args.dims)
-    print("images:")
+    if args.verbose:
+        print("images:")
+    n = 0
     for image in gather_images(args.input, format=args.format, tmpdir=tmp):
         camname, date, idx, ext = filename2dateidx(image)
         pos = index2rowcol(idx, superdim[0], superdim[1], args.order)
-        comp.set_subimage(pos, load_downsize(image, size=subdim))
+        img = load_downsize(image, size=subdim)
+        comp.set_subimage(pos, img)
+        n += 1
         if args.verbose:
-            print("\t-", camname, date, "at", pos)
+            print("\t-", camname, date, "at", pos, "pixelsum is", comp.image.sum())
+    print("num_images:", n)
     imageio.imsave(args.output, comp.image)
     shutil.rmtree(tmp)
 
