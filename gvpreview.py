@@ -37,7 +37,11 @@ def XbyY2XY(xbyy):
     (10, 20)
     >>> XbyY2XY("1X2")
     (1, 2)
+    >>> XbyY2XY((1, 2)) # Pass pre-tupleised coords through
+    (1, 2)
     """
+    if isinstance(xbyy, tuple) and len(xbyy) == 2:
+        return xbyy
     m = re.match(r"(\d+)x(\d+)", xbyy, re.I)
     if m is None:
         raise ValueError(str(xbyy) + " doesn't appear to be in XxY format")
@@ -116,7 +120,7 @@ def gather_images(tarordir, format="jpg"):
             try:
                 c, d, i, e = filename2dateidx(entry.name)
                 if e == format:
-                    pix = imageio.imread(tf.extractfile(entry))
+                    pix = imageio.imread(tf.extractfile(entry).read())
                     yield Image(entry.name, c, d, i, e, pix)
             except Exception as e:
                 print("Skipping", entry.name, ":", str(e), file=stderr)
@@ -154,7 +158,7 @@ class CompositeImage(object):
         self.image[top:bottom, left:right, ...] = image
 
 
-def make_composite(input, output, dims, resize, format="jpg",
+def make_composite(input, output, dims, resize=(200,300), format="jpg",
                    order="colsright", verbose=False):
     superdim = XbyY2XY(dims)
     subdim = XbyY2XY(resize)
